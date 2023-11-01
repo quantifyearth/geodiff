@@ -1,0 +1,8 @@
+numpy
+gdal
+
+git+https://github.com/carboncredits/yirgacheffe
+
+pylint
+pytest
+mypy

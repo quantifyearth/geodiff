@@ -1,0 +1,1 @@
+Tool to let you compare GeoTIFFs to see if they're different.
