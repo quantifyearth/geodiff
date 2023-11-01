@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -149,6 +150,47 @@ def geodiff(
         success=Result.SUCCESS if sum == 0 else Result.FAIL,
         notes="Pass" if sum == 0 else "Different pixel values found (percentage)"
     ))
+
+    # If at this stage both images are the same, our work is done
+    if sum == 0:
+        return
+
+    # Stats are a tuple of (min, max, mean, stddev)
+    left_stats = left._dataset.GetRasterBand(1).GetStatistics(False, True)
+    right_stats = right._dataset.GetRasterBand(1).GetStatistics(False, True)
+
+    same_min = math.isclose(left_stats[0], right_stats[0])
+    report["report"].append(ReportEntry(
+        key="Minimum",
+        left_value=left_stats[0],
+        right_value=right_stats[0],
+        success=Result.SUCCESS if same_min else Result.FAIL,
+        notes="Pass" if same_min else "Different lower bound pixel value"
+    ))
+
+    same_max = math.isclose(left_stats[1], right_stats[1])
+    report["report"].append(ReportEntry(
+        key="Maximum",
+        left_value=left_stats[1],
+        right_value=right_stats[1],
+        success=Result.SUCCESS if same_max else Result.FAIL,
+        notes="Pass" if same_min else "Different upper bound pixel value"
+    ))
+
+    # This is a guess that we're using an enumerated dataset. Another option would
+    # to be test for NBITS, but we already want to do the min/max check anyway
+    if same_min and same_max and same_datatype and (gdal.GDT_Byte == left.datatype) and int((left_stats[1] - left_stats[0])) < 16:
+        for value in range(int(left_stats[0]), int(left_stats[1]) + 1):
+            left_count = left.numpy_apply(lambda chunk: chunk == value).sum()
+            right_count = right.numpy_apply(lambda chunk: chunk == value).sum()
+            same_val = left_count == right_count
+            report["report"].append(ReportEntry(
+                key=f"Band {value}",
+                left_value=left_count,
+                right_value=right_count,
+                success=Result.SUCCESS if same_val else Result.FAIL,
+                notes="Pass" if same_val else f"Different counts for band by {abs(left_count - right_count)}"
+            ))
 
     return report
 
