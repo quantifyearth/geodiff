@@ -2,7 +2,7 @@ import argparse
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 from colorama import Fore, Style
 from osgeo import gdal
@@ -62,7 +62,7 @@ def gdal_datatype_to_str(gdt: int) -> str:
 def geodiff(
     left_file_path: str,
     right_file_path: str,
-    save_raster: bool,
+    save_raster_path: Optional[str],
 ) -> List[ReportEntry]:
     report = {
         "left": left_file_path,
@@ -129,7 +129,16 @@ def geodiff(
     left.set_window_for_intersection(intersection)
     right.set_window_for_intersection(intersection)
 
-    diff_layer = RasterLayer.empty_raster_layer_like(left, datatype=gdal.GDT_Byte, nbits=1)
+    diff_save_name = None
+    if save_raster_path is not None:
+        _, left_filename = os.path.split(left_file_path)
+        diff_save_name = os.path.join(save_raster_path, left_filename)
+    diff_layer = RasterLayer.empty_raster_layer_like(
+        left,
+        filename=diff_save_name,
+        datatype=gdal.GDT_Byte,
+        nbits=1
+    )
     diff_calc = left.numpy_apply(lambda left, right: left != right, right)
     sum = diff_calc.save(diff_layer, and_sum=True)
 
@@ -184,15 +193,19 @@ def main() -> None:
     )
     parser.add_argument(
         "--save-diff-raster",
-        help="Save the diff between rasters if possible",
-        action="store_true",
+        type=str,
+        help="Path of directory where to save the diff between rasters if possible",
         required=False,
-        dest="save_raster"
+        default=None,
+        dest="save_raster_path"
     )
     args = parser.parse_args()
 
+    if args.save_raster_path is not None:
+        os.makedirs(args.save_raster_path, exist_ok=True)
+
     # TODO: Add support for folders
-    report = geodiff(args.left_path, args.right_path, args.save_raster)
+    report = geodiff(args.left_path, args.right_path, args.save_raster_path)
 
     # TODO: Add option to save report as JSON
     pretty_print_report(report)
